@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v4"
 	"github.com/valen0k/url-shortener-swoyo/internal/config"
+	"github.com/valen0k/url-shortener-swoyo/internal/strategy"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 )
 
@@ -16,12 +16,8 @@ type App struct {
 	d          bool
 	configFile string
 	config     *config.Config
-	db         *pgx.Conn
-	buf        struct {
-		sync.RWMutex
-		memory map[string]string
-	}
-	url string
+	engine     strategy.EvictionAlgo
+	url        string
 }
 
 func NewApp() (*App, error) {
@@ -36,15 +32,16 @@ func NewApp() (*App, error) {
 	}
 
 	if app.d {
-		app.db, err = app.newDBConnection()
+		db, err := app.newDBConnection()
 		if err != nil {
 			return nil, err
 		}
-		if err = app.memoryRecovery(); err != nil {
+		app.engine, err = strategy.NewPsqlMemStore(db)
+		if err != nil {
 			return nil, err
 		}
 	} else {
-		app.buf.memory = make(map[string]string)
+		app.engine = strategy.NewMemStore()
 	}
 
 	app.url = fmt.Sprintf("http://%s:%s/", app.config.Server.Host, app.config.Server.Port)
@@ -77,45 +74,12 @@ func (a *App) uploadConfig() error {
 	return nil
 }
 
-func (a *App) memoryRecovery() error {
-	query := `SELECT id, url FROM test`
-	rows, err := a.db.Query(context.Background(), query)
-	if err != nil {
-		return err
-	}
-
-	var id, url string
-	a.buf.memory = make(map[string]string)
-
-	for rows.Next() {
-		err = rows.Scan(&id, &url)
-		if err != nil {
-			return err
-		}
-		a.Set(id, url)
-	}
-
-	log.Println("record recovery completed")
-	return nil
+func (a *App) set(key, val string) error {
+	return a.engine.Set(key, val)
 }
 
-func (a *App) Set(key, val string) {
-	a.buf.Lock()
-	defer a.buf.Unlock()
-
-	log.Println("recorded in memory")
-	a.buf.memory[key] = val
-}
-
-func (a *App) Get(key string) (string, bool) {
-	a.buf.RLock()
-	defer a.buf.RUnlock()
-
-	value, ok := a.buf.memory[key]
-	if ok {
-		return value, ok
-	}
-	return "", ok
+func (a *App) getValue(key string) (string, bool) {
+	return a.engine.Get(key)
 }
 
 func (a *App) newDBConnection() (*pgx.Conn, error) {
