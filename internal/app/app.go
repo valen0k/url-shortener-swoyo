@@ -12,11 +12,16 @@ import (
 	"time"
 )
 
+type Store interface {
+	Set(key, val string) error
+	Get(key string) (string, bool)
+}
+
 type App struct {
 	d          bool
 	configFile string
 	config     *config.Config
-	engine     strategy.EvictionAlgo
+	engine     Store
 	url        string
 }
 
