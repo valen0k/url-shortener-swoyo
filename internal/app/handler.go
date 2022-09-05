@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"encoding/json"
 	"github.com/valen0k/url-shortener-swoyo/internal/utils"
 	"log"
@@ -48,15 +47,11 @@ func (a *App) post(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hash := utils.GenerateHash(event.Url)
-	a.Set(hash, event.Url)
-
-	if a.d {
-		query := `INSERT INTO test (id, url) VALUES ($1, $2)`
-		if _, err := a.db.Exec(context.Background(), query, hash, event.Url); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			log.Println(err)
-			return
-		}
+	err := a.set(hash, event.Url)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println(err)
+		return
 	}
 
 	event.Url = a.url + hash
@@ -84,7 +79,7 @@ func (a *App) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hash := split[1]
-	get, ok := a.Get(hash)
+	get, ok := a.getValue(hash)
 	if !ok {
 		w.WriteHeader(http.StatusForbidden)
 		log.Println("Not found hash:", hash, "Status: StatusForbidden")
