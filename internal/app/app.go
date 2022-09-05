@@ -18,11 +18,11 @@ type Store interface {
 }
 
 type App struct {
-	d          bool
-	configFile string
-	config     *config.Config
-	engine     Store
-	url        string
+	d           bool
+	configFile  string
+	config      *config.Config
+	storeEngine Store
+	url         string
 }
 
 func NewApp() (*App, error) {
@@ -41,12 +41,12 @@ func NewApp() (*App, error) {
 		if err != nil {
 			return nil, err
 		}
-		app.engine, err = strategy.NewPsqlMemStore(db)
+		app.storeEngine, err = strategy.NewPsqlMemStore(db, strategy.NewMemStore())
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		app.engine = strategy.NewMemStore()
+		app.storeEngine = strategy.NewMemStore()
 	}
 
 	app.url = fmt.Sprintf("http://%s:%s/", app.config.Server.Host, app.config.Server.Port)
@@ -80,11 +80,11 @@ func (a *App) uploadConfig() error {
 }
 
 func (a *App) set(key, val string) error {
-	return a.engine.Set(key, val)
+	return a.storeEngine.Set(key, val)
 }
 
 func (a *App) getValue(key string) (string, bool) {
-	return a.engine.Get(key)
+	return a.storeEngine.Get(key)
 }
 
 func (a *App) newDBConnection() (*pgx.Conn, error) {

@@ -2,17 +2,21 @@ package strategy
 
 import (
 	"log"
+	"sync"
 )
 
 type MemStore struct {
-	mem *Memory
+	mem struct {
+		sync.RWMutex
+		memory map[string]string
+	}
 }
 
 func NewMemStore() *MemStore {
-	mem := &Memory{}
-	mem.memory = make(map[string]string)
+	mem := MemStore{}
+	mem.mem.memory = make(map[string]string)
 
-	return &MemStore{mem}
+	return &mem
 }
 
 func (m *MemStore) Set(key, val string) error {
